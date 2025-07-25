@@ -12,6 +12,7 @@ interface FractalCanvasProps {
   onZoomChange: (zoom: number) => void;
   onSeedPaint: (seed: [number, number], intensity: number) => void;
   autoEvolve: boolean;
+  animationsPaused: boolean;
 }
 
 const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') => void }, FractalCanvasProps>(({
@@ -25,7 +26,8 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
   onCenterChange,
   onZoomChange,
   onSeedPaint,
-  autoEvolve
+  autoEvolve,
+  animationsPaused
 }, ref) => {
   const localCanvasRef = useRef<HTMLCanvasElement>(null);
   const glRef = useRef<WebGLRenderingContext | null>(null);
@@ -33,10 +35,11 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
   const uniformsRef = useRef<any>({});
   const animationRef = useRef<number>();
   const startTimeRef = useRef<number>(Date.now());
+  const pausedTimeRef = useRef<number>(0);
+  const lastPauseStartRef = useRef<number>(0);
   const paintSeedRef = useRef<[number, number]>([0, 0]);
   const paintIntensityRef = useRef<number>(0);
 
-  // Refs to hold current state values for render function
   const centerRef = useRef(center);
   const zoomRef = useRef(zoom);
   const juliaCRef = useRef(juliaC);
@@ -45,7 +48,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
   const animationSpeedRef = useRef(animationSpeed);
   const colorsRef = useRef(colors);
 
-  // Update refs when props change
   useEffect(() => {
     centerRef.current = center;
     zoomRef.current = zoom;
@@ -55,6 +57,19 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     animationSpeedRef.current = animationSpeed;
     colorsRef.current = colors;
   }, [center, zoom, juliaC, isJulia, colorShift, animationSpeed, colors]);
+
+  useEffect(() => {
+    const currentTime = Date.now();
+    
+    if (animationsPaused) {
+      lastPauseStartRef.current = currentTime;
+    } else {
+      if (lastPauseStartRef.current > 0) {
+        pausedTimeRef.current += currentTime - lastPauseStartRef.current;
+        lastPauseStartRef.current = 0;
+      }
+    }
+  }, [animationsPaused]);
 
   const vertexShaderSource = `
     attribute vec2 a_position;
@@ -262,7 +277,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     
     if (!gl || !program || !uniforms) {
       console.log('WebGL components not ready, retrying...');
-      // Retry after a short delay
       setTimeout(() => {
         animationRef.current = requestAnimationFrame(render);
       }, 16);
@@ -275,7 +289,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
       return;
     }
 
-    // Set canvas size
     const rect = canvas.getBoundingClientRect();
     if (canvas.width !== rect.width || canvas.height !== rect.height) {
       canvas.width = rect.width;
@@ -283,17 +296,19 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
       gl.viewport(0, 0, canvas.width, canvas.height);
     }
 
-    gl.clearColor(0.06, 0.06, 0.1, 1.0); // Deep space background
+    gl.clearColor(0.06, 0.06, 0.1, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     gl.useProgram(program);
 
-    const currentTime = (Date.now() - startTimeRef.current) / 1000;
+    const realTime = Date.now() - startTimeRef.current;
+    const totalPausedTime = pausedTimeRef.current + 
+      (lastPauseStartRef.current > 0 ? Date.now() - lastPauseStartRef.current : 0);
+    const effectiveTime = (realTime - totalPausedTime) / 1000;
 
-    // Set uniforms
     try {
       gl.uniform2f(uniforms.u_resolution, canvas.width, canvas.height);
-      gl.uniform1f(uniforms.u_time, currentTime);
+      gl.uniform1f(uniforms.u_time, effectiveTime);
       gl.uniform2f(uniforms.u_center, centerRef.current[0], centerRef.current[1]);
       gl.uniform1f(uniforms.u_zoom, zoomRef.current);
       gl.uniform2f(uniforms.u_juliaC, juliaCRef.current[0], juliaCRef.current[1]);
@@ -306,7 +321,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
       gl.uniform2f(uniforms.u_paintSeed, paintSeedRef.current[0], paintSeedRef.current[1]);
       gl.uniform1f(uniforms.u_paintIntensity, paintIntensityRef.current);
 
-      // Decay paint intensity
       paintIntensityRef.current *= 0.98;
 
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -315,7 +329,7 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     }
 
     animationRef.current = requestAnimationFrame(render);
-  }, []); // Empty dependency array so it's stable
+  }, []);
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
@@ -334,25 +348,27 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     
-    if (e.buttons === 1) { // Left mouse button held
+    if (e.buttons === 1) {
       if (!isDraggingRef.current) {
-        // Start dragging
         isDraggingRef.current = true;
         lastMousePosRef.current = [x, y];
       } else {
-        // Continue dragging - pan the fractal
         const dx = x - lastMousePosRef.current[0];
         const dy = y - lastMousePosRef.current[1];
         
-        // Convert screen movement to fractal coordinate movement
-        const fractalDx = -dx * 2 / zoomRef.current * (rect.width / rect.height);
-        const fractalDy = dy * 2 / zoomRef.current;
+        const baseSensitivity = 2;
+        
+        const maxMovement = 0.1;
+        const clampedDx = Math.max(-maxMovement, Math.min(maxMovement, dx));
+        const clampedDy = Math.max(-maxMovement, Math.min(maxMovement, dy));
+        
+        const fractalDx = -clampedDx * baseSensitivity / zoomRef.current * (rect.width / rect.height);
+        const fractalDy = clampedDy * baseSensitivity / zoomRef.current;
         
         onCenterChange([centerRef.current[0] + fractalDx, centerRef.current[1] + fractalDy]);
         lastMousePosRef.current = [x, y];
       }
       
-      // Convert to fractal coordinates for painting effect
       const fractalX = ((x * 2 - 1) * (rect.width / rect.height)) / zoomRef.current + centerRef.current[0];
       const fractalY = ((1 - y * 2)) / zoomRef.current + centerRef.current[1];
       
@@ -365,8 +381,8 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
   }, [onCenterChange, onSeedPaint]);
 
   const handleMouseDown = useCallback((e: MouseEvent) => {
-    if (e.button === 0) { // Left click
-      isDraggingRef.current = false; // Reset drag state
+    if (e.button === 0) {
+      isDraggingRef.current = false;
       const canvas = localCanvasRef.current;
       if (!canvas) return;
 
@@ -376,7 +392,7 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
       
       lastMousePosRef.current = [x, y];
     }
-    if (e.button === 2) { // Right click - prevent context menu
+    if (e.button === 2) {
       e.preventDefault();
     }
   }, []);
@@ -398,7 +414,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     canvas.addEventListener('mouseup', handleMouseUp);
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // Start render loop after a brief delay to ensure WebGL is ready
     const timeoutId = setTimeout(() => {
       console.log('Starting render loop...');
       console.log('Initial state:', { 
@@ -422,7 +437,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     };
   }, [initWebGL, handleWheel, handleMouseMove, handleMouseDown, handleMouseUp]);
 
-  // Handle window resize
   useEffect(() => {
     const handleResize = () => {
       const canvas = localCanvasRef.current;
@@ -434,7 +448,7 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     };
 
     window.addEventListener('resize', handleResize);
-    handleResize(); // Initial size
+    handleResize();
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -449,7 +463,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     }
 
     try {
-      // First try: direct canvas export (current view)
       const link = document.createElement('a');
       link.download = `fractal-explorer-${Date.now()}-current-view.png`;
       link.href = canvas.toDataURL('image/png');
@@ -458,7 +471,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
       document.body.removeChild(link);
       console.log('Exported current fractal view');
       
-      // If user wants high resolution, create a new canvas
       if (resolution === '4K') {
         setTimeout(() => {
           exportHighResolution(resolution);
@@ -482,7 +494,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     const width = resolution === '4K' ? 3840 : 1920;
     const height = resolution === '4K' ? 2160 : 1080;
 
-    // Create temporary canvas for export
     const exportCanvas = document.createElement('canvas');
     exportCanvas.width = width;
     exportCanvas.height = height;
@@ -495,7 +506,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     
     const exportGlContext = exportGl as WebGLRenderingContext;
 
-    // Create shaders for export canvas
     const exportVertexShader = createShader(exportGlContext, exportGlContext.VERTEX_SHADER, vertexShaderSource);
     const exportFragmentShader = createShader(exportGlContext, exportGlContext.FRAGMENT_SHADER, fragmentShaderSource);
 
@@ -519,7 +529,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
       return;
     }
 
-    // Get uniform locations for export
     const exportUniforms = {
       u_resolution: exportGlContext.getUniformLocation(exportProgram, 'u_resolution'),
       u_time: exportGlContext.getUniformLocation(exportProgram, 'u_time'),
@@ -536,7 +545,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
       u_paintIntensity: exportGlContext.getUniformLocation(exportProgram, 'u_paintIntensity'),
     };
 
-    // Create buffer for export
     const exportPositionBuffer = exportGlContext.createBuffer();
     exportGlContext.bindBuffer(exportGlContext.ARRAY_BUFFER, exportPositionBuffer);
     exportGlContext.bufferData(exportGlContext.ARRAY_BUFFER, new Float32Array([
@@ -550,16 +558,13 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     exportGlContext.enableVertexAttribArray(exportPositionLocation);
     exportGlContext.vertexAttribPointer(exportPositionLocation, 2, exportGlContext.FLOAT, false, 0, 0);
 
-    // Set up rendering for export
     exportGlContext.viewport(0, 0, width, height);
     exportGlContext.clearColor(0.06, 0.06, 0.1, 1.0);
     exportGlContext.clear(exportGlContext.COLOR_BUFFER_BIT);
     exportGlContext.useProgram(exportProgram);
 
-    // Use current time for export
     const currentTime = (Date.now() - startTimeRef.current) / 1000;
 
-    // Set uniforms with current state
     exportGlContext.uniform2f(exportUniforms.u_resolution, width, height);
     exportGlContext.uniform1f(exportUniforms.u_time, currentTime);
     exportGlContext.uniform2f(exportUniforms.u_center, centerRef.current[0], centerRef.current[1]);
@@ -574,10 +579,8 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     exportGlContext.uniform2f(exportUniforms.u_paintSeed, paintSeedRef.current[0], paintSeedRef.current[1]);
     exportGlContext.uniform1f(exportUniforms.u_paintIntensity, paintIntensityRef.current);
 
-    // Render the fractal
     exportGlContext.drawArrays(exportGlContext.TRIANGLE_STRIP, 0, 4);
 
-    // Wait for rendering to complete then download
     setTimeout(() => {
       try {
         const link = document.createElement('a');
@@ -593,7 +596,6 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     }, 200);
   }, []);
 
-  // Expose export function
   React.useImperativeHandle(ref, () => ({
     exportCanvas
   }), [exportCanvas]);

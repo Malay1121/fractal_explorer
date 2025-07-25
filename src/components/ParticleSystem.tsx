@@ -18,6 +18,7 @@ interface ParticleSystemProps {
   colors: [number[], number[], number[]];
   fractalCenter: [number, number];
   fractalZoom: number;
+  animationsPaused?: boolean;
 }
 
 const ParticleSystem: React.FC<ParticleSystemProps> = ({
@@ -25,7 +26,8 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
   particleCount = 50,
   colors,
   fractalCenter,
-  fractalZoom
+  fractalZoom,
+  animationsPaused = false
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -66,25 +68,25 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
 
     const particles = particlesRef.current;
     
-    // Update existing particles
+    
     for (let i = particles.length - 1; i >= 0; i--) {
       const particle = particles[i];
       
-      // Update position
+      
       particle.x += particle.vx;
       particle.y += particle.vy;
       
-      // Add to trail
+      
       particle.trail.push({ x: particle.x, y: particle.y, life: particle.life });
       if (particle.trail.length > 10) {
         particle.trail.shift();
       }
       
-      // Update trail life
+      
       particle.trail.forEach(point => point.life -= 16);
       particle.trail = particle.trail.filter(point => point.life > 0);
       
-      // Apply fractal-based force
+      
       const dx = particle.x - canvas.width / 2;
       const dy = particle.y - canvas.height / 2;
       const distance = Math.sqrt(dx * dx + dy * dy);
@@ -95,26 +97,26 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
         particle.vy += (dy / distance) * force;
       }
       
-      // Apply damping
+      
       particle.vx *= 0.99;
       particle.vy *= 0.99;
       
-      // Wrap around screen
+      
       if (particle.x < 0) particle.x = canvas.width;
       if (particle.x > canvas.width) particle.x = 0;
       if (particle.y < 0) particle.y = canvas.height;
       if (particle.y > canvas.height) particle.y = 0;
       
-      // Update life
+      
       particle.life -= 16;
       
-      // Remove dead particles
+      
       if (particle.life <= 0) {
         particles.splice(i, 1);
       }
     }
     
-    // Add new particles
+    
     while (particles.length < particleCount) {
       particles.push(createParticle());
     }
@@ -127,7 +129,7 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear canvas
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     const particles = particlesRef.current;
@@ -135,7 +137,7 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
     particles.forEach(particle => {
       const alpha = particle.life / particle.maxLife;
       
-      // Draw trail
+      
       ctx.beginPath();
       particle.trail.forEach((point, index) => {
         const trailAlpha = (point.life / particle.maxLife) * alpha * 0.3;
@@ -149,7 +151,7 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
         ctx.fill();
       });
       
-      // Draw particle
+      
       ctx.globalAlpha = alpha;
       ctx.fillStyle = `rgb(${particle.color[0] * 255}, ${particle.color[1] * 255}, ${particle.color[2] * 255})`;
       ctx.shadowBlur = 10;
@@ -166,15 +168,15 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
   }, [enabled]);
 
   const animate = useCallback(() => {
-    if (!enabled) return;
+    if (!enabled || animationsPaused) return;
     
     updateParticles();
     renderParticles();
     animationRef.current = requestAnimationFrame(animate);
-  }, [enabled, updateParticles, renderParticles]);
+  }, [enabled, animationsPaused, updateParticles, renderParticles]);
 
   useEffect(() => {
-    if (enabled) {
+    if (enabled && !animationsPaused) {
       animate();
     } else {
       if (animationRef.current) {
@@ -187,7 +189,7 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [enabled, animate]);
+  }, [enabled, animationsPaused, animate]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

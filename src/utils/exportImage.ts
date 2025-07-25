@@ -4,20 +4,20 @@ export const exportCanvasAsImage = (
   resolution: '1080p' | '4K' = '1080p'
 ): void => {
   try {
-    // Get the data URL from canvas
+    
     const dataURL = canvas.toDataURL('image/png', 1.0);
     
-    // Create download link
+    
     const link = document.createElement('a');
     link.download = `${filename}-${resolution}-${Date.now()}.png`;
     link.href = dataURL;
     
-    // Trigger download
+    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     
-    // Show success message
+    
     showNotification(`Fractal exported as ${resolution} wallpaper!`, 'success');
   } catch (error) {
     console.error('Export failed:', error);
@@ -26,7 +26,7 @@ export const exportCanvasAsImage = (
 };
 
 const showNotification = (message: string, type: 'success' | 'error'): void => {
-  // Create notification element
+  
   const notification = document.createElement('div');
   notification.className = `
     fixed top-4 left-1/2 transform -translate-x-1/2 z-50 
@@ -42,7 +42,7 @@ const showNotification = (message: string, type: 'success' | 'error'): void => {
   
   document.body.appendChild(notification);
   
-  // Remove after 3 seconds
+  
   setTimeout(() => {
     notification.style.opacity = '0';
     notification.style.transform = 'translateX(-50%) translateY(-20px)';

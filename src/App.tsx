@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import FractalCanvas from './components/FractalCanvas';
 import ControlsPanel from './components/ControlsPanel';
 import Header from './components/Header';
+import ParticleSystem from './components/ParticleSystem';
 import { generateRandomFractalParams } from './utils/exportImage';
 import { COLOR_PALETTES, getRandomPalette, getPaletteByName } from './utils/colorPalettes';
 
@@ -29,11 +30,12 @@ function App() {
   const [autoEvolve, setAutoEvolve] = useState(DEFAULT_PARAMS.autoEvolve);
   const [colors, setColors] = useState<[number[], number[], number[]]>(DEFAULT_COLORS);
   const [currentPalette, setCurrentPalette] = useState(COLOR_PALETTES[0].name);
+  const [particlesEnabled, setParticlesEnabled] = useState(true);
+  const [animationsPaused, setAnimationsPaused] = useState(false);
   
   const canvasRef = useRef<any>(null);
   const autoEvolveRef = useRef<NodeJS.Timeout>();
 
-  // Auto-evolution effect
   useEffect(() => {
     if (autoEvolve) {
       autoEvolveRef.current = setInterval(() => {
@@ -73,7 +75,6 @@ function App() {
     setAnimationSpeed(params.animationSpeed);
     setIsJulia(params.isJulia);
     
-    // Also randomize the color palette
     const randomPalette = getRandomPalette();
     setColors(randomPalette.colors);
     setCurrentPalette(randomPalette.name);
@@ -98,7 +99,6 @@ function App() {
   }, []);
 
   const handleSeedPaint = useCallback((_seed: [number, number], _intensity: number) => {
-    // This is handled internally by the canvas component
   }, []);
 
   const handlePaletteChange = useCallback((paletteName: string) => {
@@ -111,10 +111,8 @@ function App() {
 
   return (
     <div className="min-h-screen bg-space-950 font-inter overflow-hidden relative">
-      {/* Background gradient overlay */}
       <div className="fixed inset-0 bg-gradient-to-br from-space-950 via-space-900 to-space-950 pointer-events-none z-0" />
       
-      {/* Animated background particles */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-10">
         {[...Array(20)].map((_, i) => (
           <motion.div
@@ -137,12 +135,10 @@ function App() {
         ))}
       </div>
 
-      {/* Header */}
       <div className="relative z-20">
         <Header />
       </div>
 
-      {/* Main Fractal Canvas */}
       <motion.div 
         className="fixed inset-0 w-full h-full z-0"
         initial={{ opacity: 0, scale: 1.1 }}
@@ -162,7 +158,19 @@ function App() {
           onZoomChange={setZoom}
           onSeedPaint={handleSeedPaint}
           autoEvolve={autoEvolve}
+          animationsPaused={animationsPaused}
         />
+        {particlesEnabled && (
+          <div className="absolute inset-0 pointer-events-none">
+            <ParticleSystem
+              enabled={particlesEnabled}
+              fractalCenter={center}
+              fractalZoom={zoom}
+              colors={colors}
+              animationsPaused={animationsPaused}
+            />
+          </div>
+        )}
       </motion.div>
 
       {/* Controls Panel */}
@@ -178,6 +186,8 @@ function App() {
           animationSpeed={animationSpeed}
           autoEvolve={autoEvolve}
           currentPalette={currentPalette}
+          particlesEnabled={particlesEnabled}
+          animationsPaused={animationsPaused}
           onCenterChange={setCenter}
           onZoomChange={setZoom}
           onJuliaCChange={setJuliaC}
@@ -189,10 +199,11 @@ function App() {
           onRandomize={handleRandomize}
           onExport={handleExport}
           onReset={handleReset}
+          onParticlesToggle={() => setParticlesEnabled(!particlesEnabled)}
+          onAnimationsPauseToggle={() => setAnimationsPaused(!animationsPaused)}
         />
       </div>
 
-      {/* Welcome Message */}
       <motion.div
         initial={{ opacity: 1 }}
         animate={{ opacity: controlsOpen ? 0 : 1 }}
@@ -209,7 +220,6 @@ function App() {
         </div>
       </motion.div>
 
-      {/* Debug Info */}
       <div className="fixed top-20 left-4 text-white text-xs font-mono bg-black bg-opacity-50 p-2 rounded z-50">
         <div>Center: [{center[0].toFixed(3)}, {center[1].toFixed(3)}]</div>
         <div>Zoom: {zoom.toFixed(3)}</div>
@@ -218,7 +228,6 @@ function App() {
         <div>Palette: {currentPalette}</div>
       </div>
 
-      {/* Custom CSS for sliders */}
       <style>{`
         .slider {
           background: linear-gradient(to right, #00E0FF 0%, #FF2CFB 50%, #8E2DE2 100%);

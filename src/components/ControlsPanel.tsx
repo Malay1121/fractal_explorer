@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Settings, Download, Shuffle, Play, Pause, Palette, RotateCcw } from 'lucide-react';
+import { Settings, Download, Shuffle, Play, Pause, Palette, RotateCcw, Sparkles, PauseCircle, PlayCircle } from 'lucide-react';
 import { COLOR_PALETTES } from '../utils/colorPalettes';
 
 interface ControlsPanelProps {
@@ -14,6 +14,8 @@ interface ControlsPanelProps {
   animationSpeed: number;
   autoEvolve: boolean;
   currentPalette: string;
+  particlesEnabled: boolean;
+  animationsPaused: boolean;
   onCenterChange: (center: [number, number]) => void;
   onZoomChange: (zoom: number) => void;
   onJuliaCChange: (juliaC: [number, number]) => void;
@@ -22,6 +24,8 @@ interface ControlsPanelProps {
   onAnimationSpeedChange: (speed: number) => void;
   onAutoEvolveToggle: (autoEvolve: boolean) => void;
   onPaletteChange: (paletteName: string) => void;
+  onParticlesToggle: (enabled: boolean) => void;
+  onAnimationsPauseToggle: (paused: boolean) => void;
   onRandomize: () => void;
   onExport: (resolution: '1080p' | '4K') => void;
   onReset: () => void;
@@ -66,6 +70,8 @@ export default function ControlsPanel({
   animationSpeed,
   autoEvolve,
   currentPalette,
+  particlesEnabled,
+  animationsPaused,
   onCenterChange,
   onZoomChange,
   onJuliaCChange,
@@ -74,13 +80,14 @@ export default function ControlsPanel({
   onAnimationSpeedChange,
   onAutoEvolveToggle,
   onPaletteChange,
+  onParticlesToggle,
+  onAnimationsPauseToggle,
   onRandomize,
   onExport,
   onReset
 }: ControlsPanelProps) {
   return (
     <>
-      {/* Toggle Button */}
       <motion.button
         onClick={onToggle}
         className="fixed top-4 right-4 z-50 p-3 rounded-full bg-glass-bg backdrop-blur-glass border border-glass-border text-white hover:bg-glass-hover transition-all duration-300 shadow-lg"
@@ -90,7 +97,6 @@ export default function ControlsPanel({
         <Settings className="w-6 h-6" />
       </motion.button>
 
-      {/* Controls Panel */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -101,12 +107,24 @@ export default function ControlsPanel({
             className="fixed top-4 right-20 z-40 w-80 max-h-[calc(100vh-2rem)] overflow-y-auto bg-glass-bg backdrop-blur-glass border border-glass-border rounded-2xl p-6 text-white shadow-2xl"
           >
             <div className="space-y-6">
-              {/* Header */}
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-bold bg-gradient-to-r from-electric-blue to-electric-magenta bg-clip-text text-transparent">
                   Fractal Controls
                 </h2>
                 <div className="flex gap-2">
+                  <motion.button
+                    onClick={() => onAnimationsPauseToggle(!animationsPaused)}
+                    className={`p-2 rounded-lg transition-all duration-300 ${
+                      animationsPaused 
+                        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50' 
+                        : 'bg-glass-bg border border-glass-border hover:bg-glass-hover'
+                    }`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    title={animationsPaused ? "Resume Animations" : "Pause Animations"}
+                  >
+                    {animationsPaused ? <PlayCircle className="w-4 h-4" /> : <PauseCircle className="w-4 h-4" />}
+                  </motion.button>
                   <motion.button
                     onClick={() => onAutoEvolveToggle(!autoEvolve)}
                     className={`p-2 rounded-lg transition-all duration-300 ${
@@ -121,6 +139,19 @@ export default function ControlsPanel({
                     {autoEvolve ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                   </motion.button>
                   <motion.button
+                    onClick={() => onParticlesToggle(!particlesEnabled)}
+                    className={`p-2 rounded-lg transition-all duration-300 ${
+                      particlesEnabled 
+                        ? 'bg-electric-magenta/20 text-electric-magenta border border-electric-magenta/50' 
+                        : 'bg-glass-bg border border-glass-border hover:bg-glass-hover'
+                    }`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    title={particlesEnabled ? "Hide Particles" : "Show Particles"}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                  </motion.button>
+                  <motion.button
                     onClick={onReset}
                     className="p-2 rounded-lg bg-glass-bg border border-glass-border hover:bg-glass-hover transition-all duration-300"
                     whileHover={{ scale: 1.05 }}
@@ -132,7 +163,6 @@ export default function ControlsPanel({
                 </div>
               </div>
 
-              {/* Fractal Type Toggle */}
               <div className="space-y-3">
                 <label className="text-sm font-medium text-gray-300">Fractal Type</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -163,7 +193,6 @@ export default function ControlsPanel({
                 </div>
               </div>
 
-              {/* Navigation Controls */}
               <div className="space-y-4">
                 <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
                   <span>Navigation</span>
@@ -197,7 +226,7 @@ export default function ControlsPanel({
                 </div>
               </div>
 
-              {/* Julia Set Parameters */}
+              {}
               {isJulia && (
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium text-gray-300">Julia Parameters</h3>
@@ -222,7 +251,7 @@ export default function ControlsPanel({
                 </div>
               )}
 
-              {/* Animation Controls */}
+              {}
               <div className="space-y-4">
                 <h3 className="text-sm font-medium text-gray-300">Animation</h3>
                 <SliderInput
@@ -245,7 +274,7 @@ export default function ControlsPanel({
                 />
               </div>
 
-              {/* Color Palette Selector */}
+              {}
               <div className="space-y-3">
                 <div className="flex items-center gap-2 mb-3">
                   <Palette className="w-4 h-4 text-electric-blue" />
@@ -266,7 +295,7 @@ export default function ControlsPanel({
                       whileTap={{ scale: 0.98 }}
                     >
                       <div className="flex items-center gap-1 mb-1">
-                        {/* Color preview dots */}
+                        {}
                         {palette.colors.map((color, index) => (
                           <div
                             key={index}
@@ -286,7 +315,7 @@ export default function ControlsPanel({
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {}
               <div className="space-y-3">
                 <motion.button
                   onClick={onRandomize}
@@ -320,7 +349,7 @@ export default function ControlsPanel({
                 </div>
               </div>
 
-              {/* Instructions */}
+              {}
               <div className="p-3 rounded-lg bg-space-900/50 border border-space-700">
                 <p className="text-xs text-gray-400 leading-relaxed">
                   <strong className="text-electric-blue">Scroll</strong> to zoom • 

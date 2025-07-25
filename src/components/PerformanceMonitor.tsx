@@ -33,14 +33,14 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({ onStatsUpdate }
       
       fpsCounter++;
       
-      // Calculate FPS every second
+      
       if (now - fpsStartTime >= 1000) {
         const fps = Math.round((fpsCounter * 1000) / (now - fpsStartTime));
         const frameTime = deltaTime;
         
-        // Get memory usage if available
+        
         const memoryUsage = (performance as any).memory?.usedJSHeapSize 
-          ? Math.round((performance as any).memory.usedJSHeapSize / 1048576) // Convert to MB
+          ? Math.round((performance as any).memory.usedJSHeapSize / 1048576) 
           : undefined;
 
         const newStats = {
@@ -71,7 +71,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({ onStatsUpdate }
     };
   }, [lastTime, onStatsUpdate]);
 
-  // Toggle visibility with Ctrl+Shift+P
+  
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'P') {
