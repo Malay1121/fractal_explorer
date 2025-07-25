@@ -36,6 +36,26 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
   const paintSeedRef = useRef<[number, number]>([0, 0]);
   const paintIntensityRef = useRef<number>(0);
 
+  // Refs to hold current state values for render function
+  const centerRef = useRef(center);
+  const zoomRef = useRef(zoom);
+  const juliaCRef = useRef(juliaC);
+  const isJuliaRef = useRef(isJulia);
+  const colorShiftRef = useRef(colorShift);
+  const animationSpeedRef = useRef(animationSpeed);
+  const colorsRef = useRef(colors);
+
+  // Update refs when props change
+  useEffect(() => {
+    centerRef.current = center;
+    zoomRef.current = zoom;
+    juliaCRef.current = juliaC;
+    isJuliaRef.current = isJulia;
+    colorShiftRef.current = colorShift;
+    animationSpeedRef.current = animationSpeed;
+    colorsRef.current = colors;
+  }, [center, zoom, juliaC, isJulia, colorShift, animationSpeed, colors]);
+
   const vertexShaderSource = `
     attribute vec2 a_position;
     varying vec2 v_texCoord;
@@ -144,46 +164,58 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
 
   const createShader = (gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null => {
     const shader = gl.createShader(type);
-    if (!shader) return null;
+    if (!shader) {
+      console.error('Failed to create shader');
+      return null;
+    }
     
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
-    
+
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-      console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+      console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
       gl.deleteShader(shader);
       return null;
     }
     
     return shader;
-  };
-
-  const initWebGL = useCallback(() => {
+  };    const initWebGL = useCallback(() => {
     const canvas = localCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.error('Canvas not found');
+      return;
+    }
 
-    const gl = canvas.getContext('webgl');
-    if (!gl) {
+    const glContext = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    if (!glContext) {
       console.error('WebGL not supported');
       return;
     }
-    
+
+    const gl = glContext as WebGLRenderingContext;
     glRef.current = gl;
 
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-    
-    if (!vertexShader || !fragmentShader) return;
+
+    if (!vertexShader || !fragmentShader) {
+      console.error('Failed to create shaders');
+      return;
+    }
 
     const program = gl.createProgram();
-    if (!program) return;
+    if (!program) {
+      console.error('Failed to create program');
+      return;
+    }
 
     gl.attachShader(program, vertexShader);
     gl.attachShader(program, fragmentShader);
     gl.linkProgram(program);
 
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error('Program link error:', gl.getProgramInfoLog(program));
+      console.error('Program linking error:', gl.getProgramInfoLog(program));
+      gl.deleteProgram(program);
       return;
     }
 
@@ -219,6 +251,8 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     const positionLocation = gl.getAttribLocation(program, 'a_position');
     gl.enableVertexAttribArray(positionLocation);
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+    
+    console.log('WebGL initialized successfully');
   }, []);
 
   const render = useCallback(() => {
@@ -226,50 +260,113 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     const program = programRef.current;
     const uniforms = uniformsRef.current;
     
-    if (!gl || !program || !uniforms) return;
+    if (!gl || !program || !uniforms) {
+      console.log('WebGL components not ready, retrying...');
+      // Retry after a short delay
+      setTimeout(() => {
+        animationRef.current = requestAnimationFrame(render);
+      }, 16);
+      return;
+    }
 
     const canvas = localCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.log('Canvas not found');
+      return;
+    }
 
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
-    gl.viewport(0, 0, canvas.width, canvas.height);
+    // Set canvas size
+    const rect = canvas.getBoundingClientRect();
+    if (canvas.width !== rect.width || canvas.height !== rect.height) {
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+
+    gl.clearColor(0.06, 0.06, 0.1, 1.0); // Deep space background
+    gl.clear(gl.COLOR_BUFFER_BIT);
 
     gl.useProgram(program);
 
     const currentTime = (Date.now() - startTimeRef.current) / 1000;
 
     // Set uniforms
-    gl.uniform2f(uniforms.u_resolution, canvas.width, canvas.height);
-    gl.uniform1f(uniforms.u_time, currentTime);
-    gl.uniform2f(uniforms.u_center, center[0], center[1]);
-    gl.uniform1f(uniforms.u_zoom, zoom);
-    gl.uniform2f(uniforms.u_juliaC, juliaC[0], juliaC[1]);
-    gl.uniform1i(uniforms.u_isJulia, isJulia ? 1 : 0);
-    gl.uniform1f(uniforms.u_colorShift, colorShift);
-    gl.uniform1f(uniforms.u_animationSpeed, animationSpeed);
-    gl.uniform3f(uniforms.u_color1, colors[0][0], colors[0][1], colors[0][2]);
-    gl.uniform3f(uniforms.u_color2, colors[1][0], colors[1][1], colors[1][2]);
-    gl.uniform3f(uniforms.u_color3, colors[2][0], colors[2][1], colors[2][2]);
-    gl.uniform2f(uniforms.u_paintSeed, paintSeedRef.current[0], paintSeedRef.current[1]);
-    gl.uniform1f(uniforms.u_paintIntensity, paintIntensityRef.current);
+    try {
+      gl.uniform2f(uniforms.u_resolution, canvas.width, canvas.height);
+      gl.uniform1f(uniforms.u_time, currentTime);
+      gl.uniform2f(uniforms.u_center, centerRef.current[0], centerRef.current[1]);
+      gl.uniform1f(uniforms.u_zoom, zoomRef.current);
+      gl.uniform2f(uniforms.u_juliaC, juliaCRef.current[0], juliaCRef.current[1]);
+      gl.uniform1i(uniforms.u_isJulia, isJuliaRef.current ? 1 : 0);
+      gl.uniform1f(uniforms.u_colorShift, colorShiftRef.current);
+      gl.uniform1f(uniforms.u_animationSpeed, animationSpeedRef.current);
+      gl.uniform3f(uniforms.u_color1, colorsRef.current[0][0], colorsRef.current[0][1], colorsRef.current[0][2]);
+      gl.uniform3f(uniforms.u_color2, colorsRef.current[1][0], colorsRef.current[1][1], colorsRef.current[1][2]);
+      gl.uniform3f(uniforms.u_color3, colorsRef.current[2][0], colorsRef.current[2][1], colorsRef.current[2][2]);
+      gl.uniform2f(uniforms.u_paintSeed, paintSeedRef.current[0], paintSeedRef.current[1]);
+      gl.uniform1f(uniforms.u_paintIntensity, paintIntensityRef.current);
 
-    // Decay paint intensity
-    paintIntensityRef.current *= 0.98;
+      // Decay paint intensity
+      paintIntensityRef.current *= 0.98;
 
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    } catch (error) {
+      console.error('WebGL render error:', error);
+    }
 
     animationRef.current = requestAnimationFrame(render);
-  }, [center, zoom, juliaC, isJulia, colorShift, animationSpeed, colors]);
+  }, []); // Empty dependency array so it's stable
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    onZoomChange(zoom * zoomFactor);
-  }, [zoom, onZoomChange]);
+    onZoomChange(zoomRef.current * zoomFactor);
+  }, [onZoomChange]);
+
+  const isDraggingRef = useRef(false);
+  const lastMousePosRef = useRef<[number, number]>([0, 0]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
+    const canvas = localCanvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    
     if (e.buttons === 1) { // Left mouse button held
+      if (!isDraggingRef.current) {
+        // Start dragging
+        isDraggingRef.current = true;
+        lastMousePosRef.current = [x, y];
+      } else {
+        // Continue dragging - pan the fractal
+        const dx = x - lastMousePosRef.current[0];
+        const dy = y - lastMousePosRef.current[1];
+        
+        // Convert screen movement to fractal coordinate movement
+        const fractalDx = -dx * 2 / zoomRef.current * (rect.width / rect.height);
+        const fractalDy = dy * 2 / zoomRef.current;
+        
+        onCenterChange([centerRef.current[0] + fractalDx, centerRef.current[1] + fractalDy]);
+        lastMousePosRef.current = [x, y];
+      }
+      
+      // Convert to fractal coordinates for painting effect
+      const fractalX = ((x * 2 - 1) * (rect.width / rect.height)) / zoomRef.current + centerRef.current[0];
+      const fractalY = ((1 - y * 2)) / zoomRef.current + centerRef.current[1];
+      
+      paintSeedRef.current = [fractalX, fractalY];
+      paintIntensityRef.current = Math.min(paintIntensityRef.current + 0.1, 1.0);
+      onSeedPaint([fractalX, fractalY], paintIntensityRef.current);
+    } else {
+      isDraggingRef.current = false;
+    }
+  }, [onCenterChange, onSeedPaint]);
+
+  const handleMouseDown = useCallback((e: MouseEvent) => {
+    if (e.button === 0) { // Left click
+      isDraggingRef.current = false; // Reset drag state
       const canvas = localCanvasRef.current;
       if (!canvas) return;
 
@@ -277,23 +374,19 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
       const x = (e.clientX - rect.left) / rect.width;
       const y = (e.clientY - rect.top) / rect.height;
       
-      // Convert to fractal coordinates
-      const fractalX = ((x * 2 - 1) * (rect.width / rect.height)) / zoom + center[0];
-      const fractalY = ((1 - y * 2)) / zoom + center[1];
-      
-      paintSeedRef.current = [fractalX, fractalY];
-      paintIntensityRef.current = 1.0;
-      onSeedPaint([fractalX, fractalY], 1.0);
+      lastMousePosRef.current = [x, y];
     }
-  }, [zoom, center, onSeedPaint]);
-
-  const handleMouseDown = useCallback((e: MouseEvent) => {
-    if (e.button === 2) { // Right click - pan
+    if (e.button === 2) { // Right click - prevent context menu
       e.preventDefault();
     }
   }, []);
 
+  const handleMouseUp = useCallback(() => {
+    isDraggingRef.current = false;
+  }, []);
+
   useEffect(() => {
+    console.log('Initializing WebGL...');
     initWebGL();
     
     const canvas = localCanvasRef.current;
@@ -302,24 +395,51 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mouseup', handleMouseUp);
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+    // Start render loop after a brief delay to ensure WebGL is ready
+    const timeoutId = setTimeout(() => {
+      console.log('Starting render loop...');
+      console.log('Initial state:', { 
+        center: centerRef.current, 
+        zoom: zoomRef.current, 
+        colors: colorsRef.current 
+      });
+      render();
+    }, 100);
+
     return () => {
+      if (timeoutId) clearTimeout(timeoutId);
       canvas.removeEventListener('wheel', handleWheel);
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('mouseup', handleMouseUp);
       canvas.removeEventListener('contextmenu', (e) => e.preventDefault());
-    };
-  }, [initWebGL, handleWheel, handleMouseMove, handleMouseDown]);
-
-  useEffect(() => {
-    render();
-    return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [render]);
+  }, [initWebGL, handleWheel, handleMouseMove, handleMouseDown, handleMouseUp]);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      const canvas = localCanvasRef.current;
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize(); // Initial size
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   const exportCanvas = useCallback((resolution: '1080p' | '4K' = '1080p') => {
     const canvas = localCanvasRef.current;
@@ -347,8 +467,8 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
   return (
     <canvas
       ref={localCanvasRef}
-      className="w-full h-full cursor-crosshair"
-      style={{ touchAction: 'none' }}
+      className="w-full h-full cursor-crosshair absolute inset-0"
+      style={{ touchAction: 'none', width: '100vw', height: '100vh' }}
     />
   );
 });

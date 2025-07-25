@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import FractalCanvas from './components/FractalCanvas';
 import ControlsPanel from './components/ControlsPanel';
@@ -12,8 +12,8 @@ const DEFAULT_COLORS: [number[], number[], number[]] = [
 ];
 
 const DEFAULT_PARAMS = {
-  center: [-0.5, 0] as [number, number],
-  zoom: 1,
+  center: [-0.75, 0] as [number, number],
+  zoom: 0.8,
   juliaC: [-0.7, 0.27015] as [number, number],
   isJulia: false,
   colorShift: 0,
@@ -97,19 +97,19 @@ function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-space-950 font-inter overflow-hidden">
+    <div className="min-h-screen bg-space-950 font-inter overflow-hidden relative">
       {/* Background gradient overlay */}
-      <div className="fixed inset-0 bg-gradient-to-br from-space-950 via-space-900 to-space-950 pointer-events-none" />
+      <div className="fixed inset-0 bg-gradient-to-br from-space-950 via-space-900 to-space-950 pointer-events-none z-0" />
       
       {/* Animated background particles */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-10">
         {[...Array(20)].map((_, i) => (
           <motion.div
             key={i}
             className="absolute w-1 h-1 bg-electric-blue rounded-full opacity-20"
             animate={{
-              x: [Math.random() * window.innerWidth, Math.random() * window.innerWidth],
-              y: [Math.random() * window.innerHeight, Math.random() * window.innerHeight],
+              x: [Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1920), Math.random() * (typeof window !== 'undefined' ? window.innerWidth : 1920)],
+              y: [Math.random() * (typeof window !== 'undefined' ? window.innerHeight : 1080), Math.random() * (typeof window !== 'undefined' ? window.innerHeight : 1080)],
             }}
             transition={{
               duration: 10 + Math.random() * 20,
@@ -117,19 +117,21 @@ function App() {
               ease: "linear"
             }}
             style={{
-              left: Math.random() * window.innerWidth,
-              top: Math.random() * window.innerHeight,
+              left: typeof window !== 'undefined' ? Math.random() * window.innerWidth : Math.random() * 1920,
+              top: typeof window !== 'undefined' ? Math.random() * window.innerHeight : Math.random() * 1080,
             }}
           />
         ))}
       </div>
 
       {/* Header */}
-      <Header />
+      <div className="relative z-20">
+        <Header />
+      </div>
 
       {/* Main Fractal Canvas */}
       <motion.div 
-        className="w-full h-screen"
+        className="fixed inset-0 w-full h-full z-0"
         initial={{ opacity: 0, scale: 1.1 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 1.2, ease: "easeOut" }}
@@ -151,33 +153,35 @@ function App() {
       </motion.div>
 
       {/* Controls Panel */}
-      <ControlsPanel
-        isOpen={controlsOpen}
-        onToggle={() => setControlsOpen(!controlsOpen)}
-        center={center}
-        zoom={zoom}
-        juliaC={juliaC}
-        isJulia={isJulia}
-        colorShift={colorShift}
-        animationSpeed={animationSpeed}
-        autoEvolve={autoEvolve}
-        onCenterChange={setCenter}
-        onZoomChange={setZoom}
-        onJuliaCChange={setJuliaC}
-        onJuliaToggle={setIsJulia}
-        onColorShiftChange={setColorShift}
-        onAnimationSpeedChange={setAnimationSpeed}
-        onAutoEvolveToggle={setAutoEvolve}
-        onRandomize={handleRandomize}
-        onExport={handleExport}
-        onReset={handleReset}
-      />
+      <div className="relative z-30">
+        <ControlsPanel
+          isOpen={controlsOpen}
+          onToggle={() => setControlsOpen(!controlsOpen)}
+          center={center}
+          zoom={zoom}
+          juliaC={juliaC}
+          isJulia={isJulia}
+          colorShift={colorShift}
+          animationSpeed={animationSpeed}
+          autoEvolve={autoEvolve}
+          onCenterChange={setCenter}
+          onZoomChange={setZoom}
+          onJuliaCChange={setJuliaC}
+          onJuliaToggle={setIsJulia}
+          onColorShiftChange={setColorShift}
+          onAnimationSpeedChange={setAnimationSpeed}
+          onAutoEvolveToggle={setAutoEvolve}
+          onRandomize={handleRandomize}
+          onExport={handleExport}
+          onReset={handleReset}
+        />
+      </div>
 
       {/* Welcome Message */}
       <motion.div
         initial={{ opacity: 1 }}
         animate={{ opacity: controlsOpen ? 0 : 1 }}
-        className="fixed bottom-8 left-1/2 transform -translate-x-1/2 pointer-events-none"
+        className="fixed bottom-8 left-1/2 transform -translate-x-1/2 pointer-events-none z-40"
       >
         <div className="text-center space-y-2">
           <motion.p 
@@ -190,8 +194,16 @@ function App() {
         </div>
       </motion.div>
 
+      {/* Debug Info */}
+      <div className="fixed top-20 left-4 text-white text-xs font-mono bg-black bg-opacity-50 p-2 rounded z-50">
+        <div>Center: [{center[0].toFixed(3)}, {center[1].toFixed(3)}]</div>
+        <div>Zoom: {zoom.toFixed(3)}</div>
+        <div>Julia: {isJulia ? 'On' : 'Off'}</div>
+        <div>Color Shift: {colorShift.toFixed(2)}</div>
+      </div>
+
       {/* Custom CSS for sliders */}
-      <style jsx>{`
+      <style>{`
         .slider {
           background: linear-gradient(to right, #00E0FF 0%, #FF2CFB 50%, #8E2DE2 100%);
           height: 8px;
