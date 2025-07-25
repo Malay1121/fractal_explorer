@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Settings, Download, Shuffle, Play, Pause, Palette, RotateCcw } from 'lucide-react';
+import { COLOR_PALETTES } from '../utils/colorPalettes';
 
 interface ControlsPanelProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface ControlsPanelProps {
   colorShift: number;
   animationSpeed: number;
   autoEvolve: boolean;
+  currentPalette: string;
   onCenterChange: (center: [number, number]) => void;
   onZoomChange: (zoom: number) => void;
   onJuliaCChange: (juliaC: [number, number]) => void;
@@ -19,6 +21,7 @@ interface ControlsPanelProps {
   onColorShiftChange: (colorShift: number) => void;
   onAnimationSpeedChange: (speed: number) => void;
   onAutoEvolveToggle: (autoEvolve: boolean) => void;
+  onPaletteChange: (paletteName: string) => void;
   onRandomize: () => void;
   onExport: (resolution: '1080p' | '4K') => void;
   onReset: () => void;
@@ -62,6 +65,7 @@ export default function ControlsPanel({
   colorShift,
   animationSpeed,
   autoEvolve,
+  currentPalette,
   onCenterChange,
   onZoomChange,
   onJuliaCChange,
@@ -69,6 +73,7 @@ export default function ControlsPanel({
   onColorShiftChange,
   onAnimationSpeedChange,
   onAutoEvolveToggle,
+  onPaletteChange,
   onRandomize,
   onExport,
   onReset
@@ -238,6 +243,47 @@ export default function ControlsPanel({
                   onChange={onColorShiftChange}
                   formatValue={(value) => `${(value * 180 / Math.PI).toFixed(0)}°`}
                 />
+              </div>
+
+              {/* Color Palette Selector */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-3">
+                  <Palette className="w-4 h-4 text-electric-blue" />
+                  <label className="text-sm font-medium text-gray-300">Color Palette</label>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  {COLOR_PALETTES.map((palette) => (
+                    <motion.button
+                      key={palette.name}
+                      onClick={() => onPaletteChange(palette.name)}
+                      className={`p-2 rounded-lg text-xs font-medium transition-all duration-300 border ${
+                        currentPalette === palette.name
+                          ? 'bg-electric-blue bg-opacity-20 border-electric-blue text-electric-blue'
+                          : 'bg-space-800 border-space-600 text-gray-300 hover:bg-space-700 hover:border-electric-blue hover:text-electric-blue'
+                      }`}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="flex items-center gap-1 mb-1">
+                        {/* Color preview dots */}
+                        {palette.colors.map((color, index) => (
+                          <div
+                            key={index}
+                            className="w-2 h-2 rounded-full"
+                            style={{
+                              backgroundColor: `rgb(${color[0] * 255}, ${color[1] * 255}, ${color[2] * 255})`
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <div className="text-left">
+                        <div className="font-medium">{palette.name}</div>
+                        <div className="text-xs opacity-60">{palette.description}</div>
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
               </div>
 
               {/* Action Buttons */}

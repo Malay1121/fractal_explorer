@@ -4,12 +4,9 @@ import FractalCanvas from './components/FractalCanvas';
 import ControlsPanel from './components/ControlsPanel';
 import Header from './components/Header';
 import { generateRandomFractalParams } from './utils/exportImage';
+import { COLOR_PALETTES, getRandomPalette, getPaletteByName } from './utils/colorPalettes';
 
-const DEFAULT_COLORS: [number[], number[], number[]] = [
-  [0, 0.875, 1], // Electric blue
-  [1, 0.173, 0.984], // Electric magenta  
-  [0.557, 0.176, 0.886] // Electric purple
-];
+const DEFAULT_COLORS: [number[], number[], number[]] = COLOR_PALETTES[0].colors;
 
 const DEFAULT_PARAMS = {
   center: [-0.75, 0] as [number, number],
@@ -30,7 +27,8 @@ function App() {
   const [colorShift, setColorShift] = useState(DEFAULT_PARAMS.colorShift);
   const [animationSpeed, setAnimationSpeed] = useState(DEFAULT_PARAMS.animationSpeed);
   const [autoEvolve, setAutoEvolve] = useState(DEFAULT_PARAMS.autoEvolve);
-  const [colors] = useState<[number[], number[], number[]]>(DEFAULT_COLORS);
+  const [colors, setColors] = useState<[number[], number[], number[]]>(DEFAULT_COLORS);
+  const [currentPalette, setCurrentPalette] = useState(COLOR_PALETTES[0].name);
   
   const canvasRef = useRef<any>(null);
   const autoEvolveRef = useRef<NodeJS.Timeout>();
@@ -74,6 +72,11 @@ function App() {
     setColorShift(params.colorShift);
     setAnimationSpeed(params.animationSpeed);
     setIsJulia(params.isJulia);
+    
+    // Also randomize the color palette
+    const randomPalette = getRandomPalette();
+    setColors(randomPalette.colors);
+    setCurrentPalette(randomPalette.name);
   }, []);
 
   const handleReset = useCallback(() => {
@@ -84,6 +87,8 @@ function App() {
     setColorShift(DEFAULT_PARAMS.colorShift);
     setAnimationSpeed(DEFAULT_PARAMS.animationSpeed);
     setAutoEvolve(DEFAULT_PARAMS.autoEvolve);
+    setColors(DEFAULT_COLORS);
+    setCurrentPalette(COLOR_PALETTES[0].name);
   }, []);
 
   const handleExport = useCallback((resolution: '1080p' | '4K') => {
@@ -92,8 +97,16 @@ function App() {
     }
   }, []);
 
-  const handleSeedPaint = useCallback((seed: [number, number], intensity: number) => {
+  const handleSeedPaint = useCallback((_seed: [number, number], _intensity: number) => {
     // This is handled internally by the canvas component
+  }, []);
+
+  const handlePaletteChange = useCallback((paletteName: string) => {
+    const palette = getPaletteByName(paletteName);
+    if (palette) {
+      setColors(palette.colors);
+      setCurrentPalette(paletteName);
+    }
   }, []);
 
   return (
@@ -164,6 +177,7 @@ function App() {
           colorShift={colorShift}
           animationSpeed={animationSpeed}
           autoEvolve={autoEvolve}
+          currentPalette={currentPalette}
           onCenterChange={setCenter}
           onZoomChange={setZoom}
           onJuliaCChange={setJuliaC}
@@ -171,6 +185,7 @@ function App() {
           onColorShiftChange={setColorShift}
           onAnimationSpeedChange={setAnimationSpeed}
           onAutoEvolveToggle={setAutoEvolve}
+          onPaletteChange={handlePaletteChange}
           onRandomize={handleRandomize}
           onExport={handleExport}
           onReset={handleReset}
@@ -200,6 +215,7 @@ function App() {
         <div>Zoom: {zoom.toFixed(3)}</div>
         <div>Julia: {isJulia ? 'On' : 'Off'}</div>
         <div>Color Shift: {colorShift.toFixed(2)}</div>
+        <div>Palette: {currentPalette}</div>
       </div>
 
       {/* Custom CSS for sliders */}

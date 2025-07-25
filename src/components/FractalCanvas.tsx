@@ -186,7 +186,7 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
       return;
     }
 
-    const glContext = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    const glContext = canvas.getContext('webgl', { preserveDrawingBuffer: true }) || canvas.getContext('experimental-webgl', { preserveDrawingBuffer: true });
     if (!glContext) {
       console.error('WebGL not supported');
       return;
@@ -443,7 +443,41 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
 
   const exportCanvas = useCallback((resolution: '1080p' | '4K' = '1080p') => {
     const canvas = localCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.error('Canvas not found for export');
+      return;
+    }
+
+    try {
+      // First try: direct canvas export (current view)
+      const link = document.createElement('a');
+      link.download = `fractal-explorer-${Date.now()}-current-view.png`;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      console.log('Exported current fractal view');
+      
+      // If user wants high resolution, create a new canvas
+      if (resolution === '4K') {
+        setTimeout(() => {
+          exportHighResolution(resolution);
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+    }
+  }, []);
+
+  const exportHighResolution = useCallback((resolution: '1080p' | '4K') => {
+    const gl = glRef.current;
+    const program = programRef.current;
+    const uniforms = uniformsRef.current;
+    
+    if (!gl || !program || !uniforms) {
+      console.error('WebGL not ready for high-res export');
+      return;
+    }
 
     const width = resolution === '4K' ? 3840 : 1920;
     const height = resolution === '4K' ? 2160 : 1080;
@@ -452,11 +486,111 @@ const FractalCanvas = forwardRef<{ exportCanvas: (resolution?: '1080p' | '4K') =
     const exportCanvas = document.createElement('canvas');
     exportCanvas.width = width;
     exportCanvas.height = height;
+    
+    const exportGl = exportCanvas.getContext('webgl', { preserveDrawingBuffer: true }) || exportCanvas.getContext('experimental-webgl', { preserveDrawingBuffer: true });
+    if (!exportGl) {
+      console.error('Could not create WebGL context for high-res export');
+      return;
+    }
+    
+    const exportGlContext = exportGl as WebGLRenderingContext;
 
-    const link = document.createElement('a');
-    link.download = `fractal-${Date.now()}-${resolution}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    // Create shaders for export canvas
+    const exportVertexShader = createShader(exportGlContext, exportGlContext.VERTEX_SHADER, vertexShaderSource);
+    const exportFragmentShader = createShader(exportGlContext, exportGlContext.FRAGMENT_SHADER, fragmentShaderSource);
+
+    if (!exportVertexShader || !exportFragmentShader) {
+      console.error('Failed to create export shaders');
+      return;
+    }
+
+    const exportProgram = exportGlContext.createProgram();
+    if (!exportProgram) {
+      console.error('Failed to create export program');
+      return;
+    }
+
+    exportGlContext.attachShader(exportProgram, exportVertexShader);
+    exportGlContext.attachShader(exportProgram, exportFragmentShader);
+    exportGlContext.linkProgram(exportProgram);
+
+    if (!exportGlContext.getProgramParameter(exportProgram, exportGlContext.LINK_STATUS)) {
+      console.error('Export program linking error:', exportGlContext.getProgramInfoLog(exportProgram));
+      return;
+    }
+
+    // Get uniform locations for export
+    const exportUniforms = {
+      u_resolution: exportGlContext.getUniformLocation(exportProgram, 'u_resolution'),
+      u_time: exportGlContext.getUniformLocation(exportProgram, 'u_time'),
+      u_center: exportGlContext.getUniformLocation(exportProgram, 'u_center'),
+      u_zoom: exportGlContext.getUniformLocation(exportProgram, 'u_zoom'),
+      u_juliaC: exportGlContext.getUniformLocation(exportProgram, 'u_juliaC'),
+      u_isJulia: exportGlContext.getUniformLocation(exportProgram, 'u_isJulia'),
+      u_colorShift: exportGlContext.getUniformLocation(exportProgram, 'u_colorShift'),
+      u_animationSpeed: exportGlContext.getUniformLocation(exportProgram, 'u_animationSpeed'),
+      u_color1: exportGlContext.getUniformLocation(exportProgram, 'u_color1'),
+      u_color2: exportGlContext.getUniformLocation(exportProgram, 'u_color2'),
+      u_color3: exportGlContext.getUniformLocation(exportProgram, 'u_color3'),
+      u_paintSeed: exportGlContext.getUniformLocation(exportProgram, 'u_paintSeed'),
+      u_paintIntensity: exportGlContext.getUniformLocation(exportProgram, 'u_paintIntensity'),
+    };
+
+    // Create buffer for export
+    const exportPositionBuffer = exportGlContext.createBuffer();
+    exportGlContext.bindBuffer(exportGlContext.ARRAY_BUFFER, exportPositionBuffer);
+    exportGlContext.bufferData(exportGlContext.ARRAY_BUFFER, new Float32Array([
+      -1, -1,
+       1, -1,
+      -1,  1,
+       1,  1,
+    ]), exportGlContext.STATIC_DRAW);
+
+    const exportPositionLocation = exportGlContext.getAttribLocation(exportProgram, 'a_position');
+    exportGlContext.enableVertexAttribArray(exportPositionLocation);
+    exportGlContext.vertexAttribPointer(exportPositionLocation, 2, exportGlContext.FLOAT, false, 0, 0);
+
+    // Set up rendering for export
+    exportGlContext.viewport(0, 0, width, height);
+    exportGlContext.clearColor(0.06, 0.06, 0.1, 1.0);
+    exportGlContext.clear(exportGlContext.COLOR_BUFFER_BIT);
+    exportGlContext.useProgram(exportProgram);
+
+    // Use current time for export
+    const currentTime = (Date.now() - startTimeRef.current) / 1000;
+
+    // Set uniforms with current state
+    exportGlContext.uniform2f(exportUniforms.u_resolution, width, height);
+    exportGlContext.uniform1f(exportUniforms.u_time, currentTime);
+    exportGlContext.uniform2f(exportUniforms.u_center, centerRef.current[0], centerRef.current[1]);
+    exportGlContext.uniform1f(exportUniforms.u_zoom, zoomRef.current);
+    exportGlContext.uniform2f(exportUniforms.u_juliaC, juliaCRef.current[0], juliaCRef.current[1]);
+    exportGlContext.uniform1i(exportUniforms.u_isJulia, isJuliaRef.current ? 1 : 0);
+    exportGlContext.uniform1f(exportUniforms.u_colorShift, colorShiftRef.current);
+    exportGlContext.uniform1f(exportUniforms.u_animationSpeed, animationSpeedRef.current);
+    exportGlContext.uniform3f(exportUniforms.u_color1, colorsRef.current[0][0], colorsRef.current[0][1], colorsRef.current[0][2]);
+    exportGlContext.uniform3f(exportUniforms.u_color2, colorsRef.current[1][0], colorsRef.current[1][1], colorsRef.current[1][2]);
+    exportGlContext.uniform3f(exportUniforms.u_color3, colorsRef.current[2][0], colorsRef.current[2][1], colorsRef.current[2][2]);
+    exportGlContext.uniform2f(exportUniforms.u_paintSeed, paintSeedRef.current[0], paintSeedRef.current[1]);
+    exportGlContext.uniform1f(exportUniforms.u_paintIntensity, paintIntensityRef.current);
+
+    // Render the fractal
+    exportGlContext.drawArrays(exportGlContext.TRIANGLE_STRIP, 0, 4);
+
+    // Wait for rendering to complete then download
+    setTimeout(() => {
+      try {
+        const link = document.createElement('a');
+        link.download = `fractal-explorer-${Date.now()}-${resolution}.png`;
+        link.href = exportCanvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        console.log(`Exported high-res fractal as ${resolution}`);
+      } catch (error) {
+        console.error('High-res export error:', error);
+      }
+    }, 200);
   }, []);
 
   // Expose export function
