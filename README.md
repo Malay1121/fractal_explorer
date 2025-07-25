@@ -17,3 +17,5 @@ Fractal Explorer is a simple tool for visualizing and exploring fractals. It all
 1. https://Malay1121.github.io/fractal_explorer
 
 Enjoy exploring the world of fractals!
+
+I have used AI to generate ideas, and get help with animations. I am not really used to this stack!
